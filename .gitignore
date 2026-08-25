@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+venv/
+.venv/
+backend/venv/
+**/venv/
+.env
+data/uploads/*
+data/chroma_db/*
+!data/uploads/.gitkeep
+!data/chroma_db/.gitkeep
+.DS_Store
+*.log
+.vscode/
+.idea/
