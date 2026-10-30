@@ -13,7 +13,7 @@ services:
       dockerfile: backend/Dockerfile
     container_name: rag-backend
     ports:
-      - "8000:8000"
+      - "8002:8000"
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
       DEFAULT_MODEL: ${DEFAULT_MODEL:-llama3}
