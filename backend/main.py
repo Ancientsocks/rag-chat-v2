@@ -37,19 +37,27 @@ DB = DATA / "chroma_db"
 UPLOADS.mkdir(parents=True, exist_ok=True)
 DB.mkdir(parents=True, exist_ok=True)
 
+# Hosted Gemini API is used in cloud deployments. Keep Ollama as an
+# optional local provider for development.
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_BASE_URL = os.getenv(
+    "GEMINI_BASE_URL",
+    "https://generativelanguage.googleapis.com/v1beta"
+).rstrip("/")
 OLLAMA = os.getenv(
     "OLLAMA_BASE_URL",
     "http://localhost:11434"
 ).rstrip("/")
 
-DEFAULT = os.getenv("DEFAULT_MODEL", "llama3")
+DEFAULT = os.getenv(
+    "DEFAULT_MODEL",
+    "gemini-3.6-flash" if LLM_PROVIDER == "gemini" else "llama3"
+)
 
 MODELS = [
     x.strip()
-    for x in os.getenv(
-        "AVAILABLE_MODELS",
-        "llama3,mistral,gemma,qwen,deepseek-r1"
-    ).split(",")
+    for x in os.getenv("AVAILABLE_MODELS", DEFAULT).split(",")
     if x.strip()
 ]
 
@@ -82,7 +90,7 @@ collection = chroma.get_or_create_collection(
 
 app = FastAPI(
     title="Reading Room RAG API",
-    description="Chat with your PDF documents using RAG and Ollama.",
+    description="Chat with your PDF documents using RAG and a hosted or local LLM.",
     version="2.2.0"
 )
 
@@ -457,60 +465,93 @@ async def chat(req: ChatRequest):
     )
 
     # --------------------------------------------------------
-    # STEP 4: CALL OLLAMA
+    # STEP 4: CALL HOSTED GEMINI OR LOCAL OLLAMA
     # --------------------------------------------------------
 
-    timeout = httpx.Timeout(
-        timeout=600.0,
-        connect=10.0
-    )
+    timeout = httpx.Timeout(timeout=120.0, connect=10.0)
 
     try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            if LLM_PROVIDER == "gemini":
+                if not GEMINI_API_KEY:
+                    raise HTTPException(
+                        status_code=503,
+                        detail="GEMINI_API_KEY is not configured on the server."
+                    )
 
-        async with httpx.AsyncClient(
-            timeout=timeout
-        ) as client:
+                endpoint = (
+                    f"{GEMINI_BASE_URL}/models/{model}:generateContent"
+                    f"?key={GEMINI_API_KEY}"
+                )
+                response = await client.post(
+                    endpoint,
+                    json={
+                        "contents": [
+                            {"role": "user", "parts": [{"text": prompt}]}
+                        ],
+                        "generationConfig": {
+                            "temperature": 0.2,
+                            "maxOutputTokens": 2048
+                        }
+                    }
+                )
+                response.raise_for_status()
+                payload = response.json()
+                candidates = payload.get("candidates") or []
+                parts = (
+                    candidates[0].get("content", {}).get("parts", [])
+                    if candidates else []
+                )
+                answer = "\n".join(
+                    part.get("text", "")
+                    for part in parts
+                    if part.get("text")
+                ).strip()
 
-            response = await client.post(
-                f"{OLLAMA}/api/generate",
-                json={
-                    "model": model,
-                    "prompt": prompt,
-                    "stream": False
-                }
-            )
+            elif LLM_PROVIDER == "ollama":
+                response = await client.post(
+                    f"{OLLAMA}/api/generate",
+                    json={
+                        "model": model,
+                        "prompt": prompt,
+                        "stream": False
+                    }
+                )
+                response.raise_for_status()
+                answer = response.json().get("response", "").strip()
 
-            response.raise_for_status()
-
-            answer = (
-                response.json()
-                .get("response", "")
-                .strip()
-            )
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Unsupported LLM_PROVIDER: {LLM_PROVIDER}"
+                )
 
             if not answer:
-
                 raise HTTPException(
                     status_code=502,
-                    detail="Ollama returned an empty response."
+                    detail="The configured AI provider returned an empty response."
                 )
 
     except httpx.TimeoutException as exc:
-
-        logger.exception("Ollama request timed out")
-
+        logger.exception("AI provider request timed out")
         raise HTTPException(
             status_code=504,
             detail="AI response timed out. Please try again."
         ) from exc
 
-    except httpx.HTTPError as exc:
-
-        logger.exception("Ollama request failed")
-
+    except httpx.HTTPStatusError as exc:
+        logger.exception("AI provider returned an HTTP error")
+        # Do not expose request URLs because the Gemini URL contains the API key.
         raise HTTPException(
             status_code=502,
-            detail=f"Ollama request failed: {exc}"
+            detail=f"AI provider returned HTTP {exc.response.status_code}."
+        ) from exc
+
+    except httpx.HTTPError as exc:
+        logger.exception("AI provider request failed")
+        raise HTTPException(
+            status_code=502,
+            detail="Could not connect to the configured AI provider."
         ) from exc
 
     # --------------------------------------------------------

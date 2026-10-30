@@ -1,0 +1,27 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: reading-room-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATA_DIR: /app/data
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY in your environment}
+      GEMINI_BASE_URL: https://generativelanguage.googleapis.com/v1beta
+      DEFAULT_MODEL: ${DEFAULT_MODEL:-gemini-2.5-flash}
+      AVAILABLE_MODELS: ${AVAILABLE_MODELS:-gemini-2.5-flash}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    volumes:
+      - reading_room_data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+volumes:
+  reading_room_data:
