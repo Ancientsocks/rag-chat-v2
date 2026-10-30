@@ -52,7 +52,7 @@ OLLAMA = os.getenv(
 
 DEFAULT = os.getenv(
     "DEFAULT_MODEL",
-    "gemini-3.5-flash" if LLM_PROVIDER == "gemini" else "llama3"
+    "gemini-3.6-flash" if LLM_PROVIDER == "gemini" else "llama3"
 )
 
 MODELS = [
