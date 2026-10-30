@@ -7,7 +7,6 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
-
   backend:
     build:
       context: .
@@ -16,24 +15,16 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - DEFAULT_MODEL=${DEFAULT_MODEL:-llama3}
-      - AVAILABLE_MODELS=${AVAILABLE_MODELS:-llama3,mistral,gemma,qwen,deepseek-r1}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
-      - RERANKER_MODEL=${RERANKER_MODEL:-cross-encoder/ms-marco-MiniLM-L-6-v2}
-      - RETRIEVAL_K=${RETRIEVAL_K:-10}
-      - USE_MMR=${USE_MMR:-true}
-      - HYBRID_SEARCH_ENABLED=${HYBRID_SEARCH_ENABLED:-true}
-      - RERANK_ENABLED=${RERANK_ENABLED:-true}
-      - OCR_ENABLED=${OCR_ENABLED:-true}
-      - CHUNK_SIZE=${CHUNK_SIZE:-900}
-      - CHUNK_OVERLAP=${CHUNK_OVERLAP:-175}
+      OLLAMA_BASE_URL: http://ollama:11434
+      DEFAULT_MODEL: ${DEFAULT_MODEL:-llama3}
+      AVAILABLE_MODELS: ${AVAILABLE_MODELS:-llama3,mistral,gemma,qwen,deepseek-r1}
+      DATA_DIR: /app/data
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8000}
     volumes:
       - rag_data:/app/data
     depends_on:
       - ollama
     restart: unless-stopped
-
 volumes:
   ollama_data:
   rag_data:

@@ -1,0 +1,6 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+python-multipart==0.0.20
+chromadb==1.0.10
+pypdf==5.5.0
+httpx==0.28.1
