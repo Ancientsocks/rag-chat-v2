@@ -5,9 +5,9 @@ from typing import Optional
 import chromadb, httpx
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
-
 DATA=Path(os.getenv("DATA_DIR","/app/data")); UPLOADS=DATA/"uploads"; DB=DATA/"chroma_db"
 UPLOADS.mkdir(parents=True,exist_ok=True); DB.mkdir(parents=True,exist_ok=True)
 OLLAMA=os.getenv("OLLAMA_BASE_URL","http://localhost:11434").rstrip("/")
@@ -15,17 +15,14 @@ DEFAULT=os.getenv("DEFAULT_MODEL","llama3")
 MODELS=[x.strip() for x in os.getenv("AVAILABLE_MODELS","llama3,mistral,gemma,qwen,deepseek-r1").split(",") if x.strip()]
 SIZE=int(os.getenv("CHUNK_SIZE","900")); OVERLAP=int(os.getenv("CHUNK_OVERLAP","175"))
 if SIZE<100 or not 0<=OVERLAP<SIZE: raise RuntimeError("Invalid chunk size/overlap")
-chroma=chromadb.PersistentClient(path=str(DB))
-collection=chroma.get_or_create_collection("reading_room",metadata={"hnsw:space":"cosine"})
+chroma=chromadb.PersistentClient(path=str(DB)); collection=chroma.get_or_create_collection("reading_room",metadata={"hnsw:space":"cosine"})
 app=FastAPI(title="Reading Room RAG API",version="2.1.0")
 app.add_middleware(CORSMiddleware,allow_origins=os.getenv("CORS_ORIGINS","http://localhost:8000").split(","),allow_methods=["*"],allow_headers=["*"])
-
 class ChatRequest(BaseModel):
  question:str=Field(min_length=1,max_length=8000)
  doc_ids:Optional[list[str]]=None
  model:Optional[str]=None
  session_id:Optional[str]=None
-
 def chunks(text):
  text=" ".join(text.split()); out=[]; start=0
  while start<len(text):
@@ -33,7 +30,6 @@ def chunks(text):
   if end==len(text): break
   start=end-OVERLAP
  return out
-
 @app.get("/health")
 def health(): return {"status":"ok","version":app.version,"vector_store":"chroma"}
 @app.get("/models")
@@ -90,3 +86,5 @@ async def chat(req:ChatRequest):
  return {"answer":answer,"sources":sources,"analytics":{"chunks_retrieved":len(docs),"model":model}}
 @app.delete("/sessions/{session_id}")
 def clear_session(session_id:str): return {"cleared":session_id}
+static=Path("/app/static")
+if static.exists(): app.mount("/",StaticFiles(directory=str(static),html=True),name="frontend")
