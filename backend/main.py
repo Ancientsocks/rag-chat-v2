@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
-DATA=Path(os.getenv("DATA_DIR","/app/data")); UPLOADS=DATA/"uploads"; DB=DATA/"chroma_db"
+DATA=Path(os.getenv("DATA_DIR",str(Path(__file__).resolve().parent/"data"))).expanduser(); UPLOADS=DATA/"uploads"; DB=DATA/"chroma_db"
 UPLOADS.mkdir(parents=True,exist_ok=True); DB.mkdir(parents=True,exist_ok=True)
 OLLAMA=os.getenv("OLLAMA_BASE_URL","http://localhost:11434").rstrip("/")
 DEFAULT=os.getenv("DEFAULT_MODEL","llama3")
